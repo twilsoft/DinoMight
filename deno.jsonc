@@ -1,0 +1,7 @@
+{
+  "importMap": "import_map.json",
+  "tasks": {
+    "run": "deno run ./src/mod.ts",
+    "test": "deno test ./src/might.test.ts"
+  }
+}
