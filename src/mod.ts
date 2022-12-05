@@ -11,30 +11,34 @@ type IMightResult<V, E> = {
   isOk: boolean;
   isError: boolean;
   match: MightMatcher<V, E>;
-  withValue: <R>(func: WithValue<V, R>) => Might<R, E>;
-  withError: <R>(func: WithValue<E, R>) => Might<V, R>;
-  // unwrap: (<F>(fallback?: F) => F | V) & (() => V | undefined);
+  withValue: <R>(withValueFunc: (value: V) => R) => Might<R, E>;
+  withError: <R>(withErrorFunc: (value: E) => R) => Might<V, R>;
+  recover: (recoverFunc: (error: E) => V) => Ok<V, E>;
+  pipe: <IV, IE>(target: (value: V) => Might<IV, IE>) => Might<IV, E | IE>;
+  peek: () => V | undefined;
 };
 
-type Ok<V, E = never> = IMightResult<V, E> & {
+type Ok<V, E> = IMightResult<V, E> & {
   isOk: true;
   isError: false;
   value: V;
 };
 
-type Err<E, V = never> = IMightResult<V, E> & {
+type Err<E, V> = IMightResult<V, E> & {
   isOk: false;
   isError: true;
   error: E;
 };
 
-export type Might<V, E> = Ok<V> | Err<E>;
+export type Might<V, E> = Ok<V, E> | Err<E, V>;
 
-export const ok = <V, E = never>(value: V): Ok<V, E> => {
-  const match: MightMatcher<V, never> = (onValue, _) => onValue(value);
-  const withValue = <R>(func: WithValue<V, R>) => ok(func(value));
-  const withError = () => ok(value);
-  const unwrap = () => value;
+export const ok = <V, E = unknown>(value: V): Ok<V, E> => {
+  const match: MightMatcher<V, E> = (onValue, _) => onValue(value);
+  const withValue = <R>(func: WithValue<V, R>) => ok<R, E>(func(value));
+  const withError = <R>() => ok<V, R>(value);
+  const recover = () => ok<V, E>(value);
+  const pipe = <IE, IV>(target: (value: V) => Might<IV, IE>) => target(value);
+  const peek = () => value;
 
   return {
     isOk: true,
@@ -43,15 +47,19 @@ export const ok = <V, E = never>(value: V): Ok<V, E> => {
     match,
     withValue,
     withError,
-    // unwrap,
+    recover,
+    pipe,
+    peek,
   };
 };
 
-export const err = <E, V = never>(error: E): Err<E, V> => {
-  const match: MightMatcher<never, E> = (_, onError) => onError(error);
-  const withError = <R>(func: WithValue<E, R>) => err(func(error));
-  const withValue = () => err(error);
-  const unwrap = (fallback: any) => fallback;
+export const err = <E, V = unknown>(error: E): Err<E, V> => {
+  const match: MightMatcher<V, E> = (_, onError) => onError(error);
+  const withError = <R>(func: WithValue<E, R>) => err<R, V>(func(error));
+  const withValue = <R>() => err<E, R>(error);
+  const recover = (func: (error: E) => V) => ok<V, E>(func(error));
+  const pipe = <IV>() => err<E, IV>(error);
+  const peek = () => undefined;
 
   return {
     isOk: false,
@@ -60,6 +68,8 @@ export const err = <E, V = never>(error: E): Err<E, V> => {
     match,
     withValue,
     withError,
-    // unwrap,
+    recover,
+    pipe,
+    peek,
   };
 };
