@@ -1,7 +1,7 @@
 // deno-lint-ignore no-explicit-any
-type anyFunction = (...args: unknown[]) => any;
+type Function = (...args: any[]) => any;
 // deno-lint-ignore no-explicit-any
-type anyAsyncFunction = (...args: unknown[]) => Promise<any>;
+type AsyncFunction = (...args: any[]) => Promise<any>;
 
 type MightBaseProps = {
   readonly match: unknown;
@@ -18,11 +18,11 @@ type ValueMatcher<V, R> = (value: V) => R;
 type ValueMatcherAsync<V, R> = (value: V) => Promise<R> | R;
 type MightMatcher<V, E> = <R>(
   onValue: ValueMatcher<V, R>,
-  onError: ErrMatcher<E, R>,
+  onError: ErrMatcher<E, R>
 ) => R;
 type MightMatcherAsync<V, E> = <R>(
   onValue: ValueMatcherAsync<V, R>,
-  onError: ErrMatcherAsync<E, R>,
+  onError: ErrMatcherAsync<E, R>
 ) => Promise<R>;
 type WithValue<V, R> = (value: V) => R;
 
@@ -31,27 +31,26 @@ type IMightResult<V, E> = IncludeMightProps<{
   readonly withValue: <R>(withValueFunc: (value: V) => R) => Might<R, E>;
   readonly withError: <R>(withErrorFunc: (value: E) => R) => Might<V, R>;
   readonly pipe: <IV, IE>(
-    target: (value: V) => Might<IV, IE>,
+    target: (value: V) => Might<IV, IE>
   ) => Might<IV, E | IE>;
   readonly peek: <T>(defaultValue: T) => V | T;
 }>;
 
 /** @description an unseresolved async result */
-export type MightAsync<V, E> =
-  & IncludeMightProps<{
-    readonly match: MightMatcherAsync<V, E>;
-    readonly withValue: <R>(
-      withValueFunc: (value: V) => R,
-    ) => MightAsync<V | R, E>;
-    readonly withError: <R>(
-      withErrorFunc: (value: E) => R,
-    ) => MightAsync<V, E | R>;
-    readonly pipe: <IV, IE>(
-      target: (value: V) => Might<IV, IE> | MightAsync<IV, IE>,
-    ) => MightAsync<V | IV, E | IE>;
-    readonly peek: <T>(defaultValue: T) => Promise<V | T>;
-  }>
-  & Promise<Might<V, E>>;
+export type MightAsync<V, E> = IncludeMightProps<{
+  readonly match: MightMatcherAsync<V, E>;
+  readonly withValue: <R>(
+    withValueFunc: (value: V) => R
+  ) => MightAsync<V | R, E>;
+  readonly withError: <R>(
+    withErrorFunc: (value: E) => R
+  ) => MightAsync<V, E | R>;
+  readonly pipe: <IV, IE>(
+    target: (value: V) => Might<IV, IE> | MightAsync<IV, IE>
+  ) => MightAsync<IV, E | IE>;
+  readonly peek: <T>(defaultValue: T) => Promise<V | T>;
+}> &
+  Promise<Might<V, E>>;
 
 /** @description A successful result */
 export type Ok<V, E> = IMightResult<V, E> & {
@@ -117,44 +116,45 @@ export const err = <E, V = unknown>(error: E): Err<E, V> => {
 };
 
 /** @description converts a function to return a Might result */
-export const mightify = <F extends anyFunction, E = unknown>(
-  func: F,
-  transformError: (error: unknown) => E,
-): (...args: Parameters<F>) => Might<ReturnType<F>, E> =>
-(...args) => {
-  try {
-    return ok(func(...args));
-  } catch (error) {
-    return err(transformError(error));
-  }
-};
+export const mightify =
+  <F extends Function, E = unknown>(
+    func: F,
+    transformError: (error: unknown) => E
+  ): ((...args: Parameters<F>) => Might<ReturnType<F>, E>) =>
+  (...args) => {
+    try {
+      return ok(func(...args));
+    } catch (error) {
+      return err(transformError(error));
+    }
+  };
 
 /** @description wrap a promise so that it can be manipulated as a result */
 export const mightPromise = <V, E = unknown>(
   prom: Promise<V>,
-  transformError: (err: unknown) => E,
+  transformError: (err: unknown) => E
 ): MightAsync<V, E> => ({
   [Symbol.toStringTag]: prom[Symbol.toStringTag] + ":mightified",
   match: (onSuccess, onError) =>
     prom.then(
       (value) => onSuccess(value),
-      (error) => onError(transformError(error)),
+      (error) => onError(transformError(error))
     ),
   withError: (func) =>
     mightPromise(
       prom.then(
         () => prom,
-        (err) => err,
+        (err) => err
       ),
-      (err) => func(transformError(err)),
+      (err) => func(transformError(err))
     ),
   withValue: (func) =>
     mightPromise(
       prom.then(
         (value) => func(value),
-        () => prom,
+        () => prom
       ),
-      transformError,
+      transformError
     ),
   pipe: (func) =>
     mightPromise(
@@ -164,20 +164,20 @@ export const mightPromise = <V, E = unknown>(
             Promise.resolve(func(value)).then((result) =>
               result.isOk ? resolve(result.value) : reject(result.error)
             ),
-          (_error) => prom,
+          (_error) => prom
         );
       }),
-      transformError,
+      transformError
     ),
   peek: (defaultValue) =>
     prom.then(
       (value) => value,
-      () => defaultValue,
+      () => defaultValue
     ),
   then: (onSuccess, onError) =>
     prom.then(
       (value) => (onSuccess ? onSuccess(ok(value)) : value),
-      (error) => (onError ? onError(err(transformError(error))) : error),
+      (error) => (onError ? onError(err(transformError(error))) : error)
     ),
   catch: (onError) =>
     prom.catch((error) =>
@@ -187,8 +187,10 @@ export const mightPromise = <V, E = unknown>(
 });
 
 /** @description convert an async function to return a MightAsync result */
-export const mightifyAsync = <F extends anyAsyncFunction, E = unknown>(
-  func: F,
-  transformError: (error: unknown) => E,
-): (...args: Parameters<F>) => MightAsync<ReturnType<F>, E> =>
-(...args) => mightPromise(func(...args), transformError);
+export const mightifyAsync =
+  <F extends AsyncFunction, E = unknown>(
+    func: F,
+    transformError: (error: unknown) => E
+  ): ((...args: Parameters<F>) => MightAsync<Awaited<ReturnType<F>>, E>) =>
+  (...args) =>
+    mightPromise<Awaited<ReturnType<F>>, E>(func(...args), transformError);
